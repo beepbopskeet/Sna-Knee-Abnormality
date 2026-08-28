@@ -1,0 +1,19 @@
+# Yarışma verisi GitHub'a YÜKLENMEMELİ (kurallar veri paylaşımını kısıtlayabilir,
+# ayrıca train.csv/train_series.csv büyük ve DICOM'lar 570GB).
+data/train.csv
+data/train_series.csv
+data/train_series/
+data/test_series/
+data/*.dcm
+
+# Model ağırlıkları / eğitim çıktıları (büyük, ayrı Kaggle Dataset olarak paylaşılmalı)
+outputs/
+*.pt
+*.pth
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+*.egg-info/
