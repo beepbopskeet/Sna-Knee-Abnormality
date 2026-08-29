@@ -1,8 +1,8 @@
 # Baseline eğitim konfigürasyonu
 pseudo_labels_csv: "data/pseudo_labels.csv"
-train_series_csv: "data/train_series.csv"
-series_root: "data/train_series"
-output_dir: "outputs"
+train_series_csv: "/kaggle/input/competitions/rsna-knee-abnormality-detection/train_series.csv"
+series_root: "/kaggle/input/competitions/rsna-knee-abnormality-detection/train_series"
+output_dir: "/kaggle/working/outputs"
 
 backbone: "efficientnet_b0"
 target_slices: 24
