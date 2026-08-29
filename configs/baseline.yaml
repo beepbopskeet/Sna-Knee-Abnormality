@@ -5,11 +5,11 @@ series_root: "/kaggle/input/competitions/rsna-knee-abnormality-detection/train_s
 output_dir: "/kaggle/working/outputs"
 
 backbone: "efficientnet_b0"
-target_slices: 24
-resize_to: 224
+target_slices: 12
+resize_to: 192
 
-batch_size: 4
-num_workers: 4
+batch_size: 1
+num_workers: 2
 lr: 0.0001
 weight_decay: 0.00001
 epochs: 15

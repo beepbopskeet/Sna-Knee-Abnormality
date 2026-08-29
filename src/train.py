@@ -47,6 +47,7 @@ def train_one_fold(cfg, train_df, val_df, series_df, fold: int):
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg["epochs"])
     criterion = nn.BCEWithLogitsLoss()
+    scaler = torch.cuda.amp.GradScaler(enabled=(device.type == "cuda"))
 
     best_auc = 0.0
     for epoch in range(cfg["epochs"]):
@@ -54,10 +55,12 @@ def train_one_fold(cfg, train_df, val_df, series_df, fold: int):
         for views, labels in train_loader:
             views, labels = views.to(device), labels.to(device)
             optimizer.zero_grad()
-            logits = model(views)
-            loss = criterion(logits, labels)
-            loss.backward()
-            optimizer.step()
+            with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=(device.type == "cuda")):
+                logits = model(views)
+                loss = criterion(logits, labels)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
         scheduler.step()
 
         model.eval()
@@ -65,8 +68,9 @@ def train_one_fold(cfg, train_df, val_df, series_df, fold: int):
         with torch.no_grad():
             for views, labels in val_loader:
                 views = views.to(device)
-                logits = model(views)
-                probs = torch.sigmoid(logits).cpu().numpy()
+                with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=(device.type == "cuda")):
+                    logits = model(views)
+                probs = torch.sigmoid(logits).float().cpu().numpy()
                 all_pred.append(probs)
                 all_true.append(labels.numpy())
         y_true = np.concatenate(all_true)
