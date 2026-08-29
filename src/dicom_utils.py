@@ -40,7 +40,12 @@ def read_dicom_slice(path: str, resize_to: int = None) -> np.ndarray:
 
     # Min-max normalize [0, 1]
     lo, hi = np.percentile(arr, [0.5, 99.5])
-    arr = np.clip((arr - lo) / max(hi - lo, 1e-6), 0, 1)
+    denom = hi - lo
+    if denom < 1e-3:
+        # Neredeyse sabit/boş görüntü -- bölme sonucu aşırı büyük/NaN değer üretmesin diye sıfır döndür
+        arr = np.zeros_like(arr)
+    else:
+        arr = np.clip((arr - lo) / denom, 0, 1)
 
     if resize_to is not None and arr.shape != (resize_to, resize_to):
         arr = cv2.resize(arr, (resize_to, resize_to), interpolation=cv2.INTER_AREA)

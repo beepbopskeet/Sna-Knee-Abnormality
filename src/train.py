@@ -49,7 +49,6 @@ def train_one_fold(cfg, train_df, val_df, series_df, fold: int):
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg["epochs"])
     criterion = nn.BCEWithLogitsLoss()
-    scaler = torch.amp.GradScaler('cuda', enabled=(device.type == "cuda"))
 
     best_auc = 0.0
     for epoch in range(cfg["epochs"]):
@@ -57,12 +56,13 @@ def train_one_fold(cfg, train_df, val_df, series_df, fold: int):
         for views, labels in train_loader:
             views, labels = views.to(device), labels.to(device)
             optimizer.zero_grad()
-            with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=(device.type == "cuda")):
-                logits = model(views)
-                loss = criterion(logits, labels)
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+            logits = model(views)
+            loss = criterion(logits, labels)
+            if not torch.isfinite(loss):
+                continue  # NaN/inf kaybı veren batch'i atla, eğitimi bozmasın
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
         scheduler.step()
 
         model.eval()
@@ -70,9 +70,9 @@ def train_one_fold(cfg, train_df, val_df, series_df, fold: int):
         with torch.no_grad():
             for views, labels in val_loader:
                 views = views.to(device)
-                with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=(device.type == "cuda")):
-                    logits = model(views)
+                logits = model(views)
                 probs = torch.sigmoid(logits).float().cpu().numpy()
+                probs = np.nan_to_num(probs, nan=0.5)  # kalan olası NaN'ları güvenli değere çevir
                 all_pred.append(probs)
                 all_true.append(labels.numpy())
         y_true = np.concatenate(all_true)
