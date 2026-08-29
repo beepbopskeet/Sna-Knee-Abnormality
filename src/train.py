@@ -6,6 +6,7 @@ Kullanım:
     python src/train.py --config configs/baseline.yaml
 """
 import argparse
+import os
 
 import numpy as np
 import pandas as pd
@@ -32,6 +33,7 @@ def macro_auc(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 def train_one_fold(cfg, train_df, val_df, series_df, fold: int):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    os.makedirs(cfg["output_dir"], exist_ok=True)
 
     train_ds = KneeMRIDataset(train_df, series_df, cfg["series_root"],
                                target_slices=cfg["target_slices"], resize_to=cfg["resize_to"])
@@ -47,7 +49,7 @@ def train_one_fold(cfg, train_df, val_df, series_df, fold: int):
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg["epochs"])
     criterion = nn.BCEWithLogitsLoss()
-    scaler = torch.cuda.amp.GradScaler(enabled=(device.type == "cuda"))
+    scaler = torch.amp.GradScaler('cuda', enabled=(device.type == "cuda"))
 
     best_auc = 0.0
     for epoch in range(cfg["epochs"]):
