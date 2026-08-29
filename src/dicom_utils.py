@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 import numpy as np
+import cv2
 
 try:
     import pydicom
@@ -23,8 +24,12 @@ def list_series_files(study_dir: str, series_uid: str) -> list:
     return [str(f) for f in files]
 
 
-def read_dicom_slice(path: str) -> np.ndarray:
-    """Tek bir DICOM slice'ı okuyup normalize edilmiş float32 array olarak döndürür."""
+def read_dicom_slice(path: str, resize_to: int = None) -> np.ndarray:
+    """Tek bir DICOM slice'ı okuyup normalize edilmiş float32 array olarak döndürür.
+    resize_to verilirse, çıktı (resize_to, resize_to) boyutuna getirilir -- farklı
+    serilerin farklı native çözünürlükte olması nedeniyle bu adım ZORUNLUDUR, yoksa
+    np.stack ile birleştirirken 'all input arrays must have the same shape' hatası alınır.
+    """
     ds = pydicom.dcmread(path)
     arr = ds.pixel_array.astype(np.float32)
 
@@ -36,6 +41,10 @@ def read_dicom_slice(path: str) -> np.ndarray:
     # Min-max normalize [0, 1]
     lo, hi = np.percentile(arr, [0.5, 99.5])
     arr = np.clip((arr - lo) / max(hi - lo, 1e-6), 0, 1)
+
+    if resize_to is not None and arr.shape != (resize_to, resize_to):
+        arr = cv2.resize(arr, (resize_to, resize_to), interpolation=cv2.INTER_AREA)
+
     return arr
 
 
@@ -57,7 +66,7 @@ def load_series_volume(study_dir: str, series_uid: str, target_slices: int = 24,
     slices = []
     for i in idx:
         try:
-            arr = read_dicom_slice(files[i])
+            arr = read_dicom_slice(files[i], resize_to=resize_to)
         except Exception:
             arr = np.zeros((resize_to, resize_to), dtype=np.float32)
         slices.append(arr)
