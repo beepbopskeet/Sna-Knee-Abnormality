@@ -53,10 +53,10 @@ def train_one_fold(cfg, train_df, val_df, series_df, fold: int):
     best_auc = 0.0
     for epoch in range(cfg["epochs"]):
         model.train()
-        for views, labels in train_loader:
-            views, labels = views.to(device), labels.to(device)
+        for views, mask, labels in train_loader:
+            views, mask, labels = views.to(device), mask.to(device), labels.to(device)
             optimizer.zero_grad()
-            logits = model(views)
+            logits = model(views, view_mask=mask)
             loss = criterion(logits, labels)
             if not torch.isfinite(loss):
                 continue  # NaN/inf kaybı veren batch'i atla, eğitimi bozmasın
@@ -68,9 +68,9 @@ def train_one_fold(cfg, train_df, val_df, series_df, fold: int):
         model.eval()
         all_true, all_pred = [], []
         with torch.no_grad():
-            for views, labels in val_loader:
-                views = views.to(device)
-                logits = model(views)
+            for views, mask, labels in val_loader:
+                views, mask = views.to(device), mask.to(device)
+                logits = model(views, view_mask=mask)
                 probs = torch.sigmoid(logits).float().cpu().numpy()
                 probs = np.nan_to_num(probs, nan=0.5)  # kalan olası NaN'ları güvenli değere çevir
                 all_pred.append(probs)

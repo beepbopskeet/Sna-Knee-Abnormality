@@ -1,0 +1,19 @@
+# Ensemble için ikinci model konfigürasyonu -- daha büyük backbone (efficientnet_b3).
+# baseline.yaml (efficientnet_b0) ile birlikte eğitilip submission notebook'unda
+# tahminleri ortalanır (ensemble).
+pseudo_labels_csv: "data/pseudo_labels.csv"
+train_series_csv: "/kaggle/input/competitions/rsna-knee-abnormality-detection/train_series.csv"
+series_root: "/kaggle/input/competitions/rsna-knee-abnormality-detection/train_series"
+output_dir: "/kaggle/working/outputs_big"
+
+backbone: "efficientnet_b3"
+target_slices: 12
+resize_to: 192
+
+batch_size: 1
+num_workers: 2
+lr: 0.0001
+weight_decay: 0.00001
+epochs: 15
+n_folds: 5
+seed: 42
