@@ -18,7 +18,8 @@ LABEL_COLS = ['ACL', 'MCL', 'Medial Meniscus', 'Lateral Meniscus', 'Medial OA',
               'Lateral OA', 'PF OA', 'Effusion', 'Synovitis', "Baker's",
               'Contusion', 'Fracture']
 
-MAX_VIEWS = 8  # bir study'den en fazla kaç seri kullanılacağı (median 5.5, max 14 idi)
+MAX_VIEWS = 6  # bir study'den en fazla kaç seri kullanılacağı (median 5.5 idi; 8 denendi,
+                # düşük değerli seriler gürültü kattı, AUC düştü -- 6'ya çekildi)
 
 
 class KneeMRIDataset(Dataset):
@@ -42,11 +43,20 @@ class KneeMRIDataset(Dataset):
         return len(self.labels_df)
 
     def _load_study_views(self, study_uid: str) -> tuple:
-        """Study'ye ait TÜM serileri (max_views'e kadar) yükler.
-        Dönüş: (views, mask) -- views: (max_views, target_slices, H, W), mask: (max_views,)
-        mask[i]=1 gerçek bir seri, mask[i]=0 padding (yoksayılmalı)."""
-        series_ids = get_study_series_uids(self.series_df, study_uid)
-        series_ids = series_ids[:self.max_views]  # fazlaysa kırp
+        """Study'ye ait serileri ÖNCELİK SIRASINA göre (Fluid_Sensitive=1 önce, sonra
+        diğerleri) yükler, max_views'e kadar. Öncelik sırası önemli: lokalizasyon/referans
+        gibi tanısal değeri düşük serileri elemeden hepsini kullanmak modele gürültü katıp
+        performansı düşürebiliyor (v1 denemesinde gözlemlendi) -- bu yüzden en bilgilendirici
+        seriler (fluid-sensitive sekanslar) öncelikli sırada, kırpma olursa önce onlar kalır.
+        Dönüş: (views, mask) -- views: (max_views, target_slices, H, W), mask: (max_views,)."""
+        mask_rows = self.series_df["StudyInstanceUID"] == study_uid
+        study_series = self.series_df.loc[mask_rows].copy()
+        if len(study_series) == 0:
+            series_ids = []
+        else:
+            # Fluid_Sensitive=1 olanlar önce gelsin (daha bilgilendirici sekanslar)
+            study_series = study_series.sort_values("Fluid_Sensitive", ascending=False)
+            series_ids = study_series["SeriesInstanceUID"].tolist()[:self.max_views]
 
         views = []
         for sid in series_ids:
