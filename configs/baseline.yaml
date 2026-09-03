@@ -2,6 +2,7 @@
 pseudo_labels_csv: "data/pseudo_labels.csv"
 train_series_csv: "/kaggle/input/competitions/rsna-knee-abnormality-detection/train_series.csv"
 series_root: "/kaggle/input/competitions/rsna-knee-abnormality-detection/train_series"
+site_groups_csv: "data/site_groups.csv"  # extract_site_groups.py ile üretilir (opsiyonel)
 output_dir: "/kaggle/working/outputs"
 
 backbone: "efficientnet_b0"
@@ -10,8 +11,8 @@ resize_to: 192
 
 batch_size: 1
 num_workers: 2
-lr: 0.00007
+lr: 0.0001
 weight_decay: 0.00001
-epochs: 20
+epochs: 15
 n_folds: 5
 seed: 42

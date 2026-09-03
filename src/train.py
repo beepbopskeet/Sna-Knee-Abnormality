@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 import yaml
 from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, GroupKFold
 from torch.utils.data import DataLoader
 
 from dataset import KneeMRIDataset, LABEL_COLS
@@ -53,10 +53,10 @@ def train_one_fold(cfg, train_df, val_df, series_df, fold: int):
     best_auc = 0.0
     for epoch in range(cfg["epochs"]):
         model.train()
-        for views, mask, labels in train_loader:
-            views, mask, labels = views.to(device), mask.to(device), labels.to(device)
+        for views, labels in train_loader:
+            views, labels = views.to(device), labels.to(device)
             optimizer.zero_grad()
-            logits = model(views, view_mask=mask)
+            logits = model(views)
             loss = criterion(logits, labels)
             if not torch.isfinite(loss):
                 continue  # NaN/inf kaybı veren batch'i atla, eğitimi bozmasın
@@ -68,9 +68,9 @@ def train_one_fold(cfg, train_df, val_df, series_df, fold: int):
         model.eval()
         all_true, all_pred = [], []
         with torch.no_grad():
-            for views, mask, labels in val_loader:
-                views, mask = views.to(device), mask.to(device)
-                logits = model(views, view_mask=mask)
+            for views, labels in val_loader:
+                views = views.to(device)
+                logits = model(views)
                 probs = torch.sigmoid(logits).float().cpu().numpy()
                 probs = np.nan_to_num(probs, nan=0.5)  # kalan olası NaN'ları güvenli değere çevir
                 all_pred.append(probs)
@@ -98,9 +98,26 @@ def main():
     labels_df = pd.read_csv(cfg["pseudo_labels_csv"])
     series_df = pd.read_csv(cfg["train_series_csv"])
 
-    kf = KFold(n_splits=cfg["n_folds"], shuffle=True, random_state=cfg["seed"])
+    # Site/cihaz bazlı gruplu fold: aynı hastane/cihazdan gelen study'ler hep aynı
+    # fold'da kalır, böylece model "hangi cihaz" yerine gerçek patolojiyi öğrenmeye
+    # zorlanır (bkz. README -- rastgele fold, AUC'yi yapay olarak şişirebiliyor).
+    site_groups_path = cfg.get("site_groups_csv")
+    if site_groups_path and os.path.exists(site_groups_path):
+        site_df = pd.read_csv(site_groups_path)
+        labels_df = labels_df.merge(site_df, on="StudyInstanceUID", how="left")
+        labels_df["site_group"] = labels_df["site_group"].fillna("unknown")
+        groups = labels_df["site_group"].values
+        kf = GroupKFold(n_splits=cfg["n_folds"])
+        split_iter = kf.split(labels_df, groups=groups)
+        print(f"GroupKFold kullaniliyor ({labels_df['site_group'].nunique()} benzersiz grup).")
+    else:
+        kf = KFold(n_splits=cfg["n_folds"], shuffle=True, random_state=cfg["seed"])
+        split_iter = kf.split(labels_df)
+        print("UYARI: site_groups_csv bulunamadi, rastgele KFold kullaniliyor "
+              "(bkz. README -- GroupKFold icin once extract_site_groups.py calistirin).")
+
     fold_scores = []
-    for fold, (train_idx, val_idx) in enumerate(kf.split(labels_df)):
+    for fold, (train_idx, val_idx) in enumerate(split_iter):
         train_df = labels_df.iloc[train_idx]
         val_df = labels_df.iloc[val_idx]
         auc = train_one_fold(cfg, train_df, val_df, series_df, fold)
